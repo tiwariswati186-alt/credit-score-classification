@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Credit Score Model Dashboard</title>
+<style>
+:root{--bg:#EEF4F2;--card:#FFFFFF;--text:#1B2B2A;--mute:#5E6E6C;--line:#D5DEDB;--ink:#0E3B43;--poor:#E4572E;--std:#F2A541;--good:#2A9D8F;--accent:#2A9D8F;--onacc:#FFFFFF;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0F1A1A;--card:#162626;--text:#E8F0EE;--mute:#9DB0AD;--line:#2B4140;--ink:#9FD8D0}}
+:root[data-theme="dark"]{--bg:#0F1A1A;--card:#162626;--text:#E8F0EE;--mute:#9DB0AD;--line:#2B4140;--ink:#9FD8D0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Calibri,Arial,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1000px;margin:0 auto;padding:20px 16px 32px}
+h1{font-family:Cambria,Georgia,serif;font-size:28px;margin:0;color:var(--ink)}
+h2{font-family:Cambria,Georgia,serif;font-size:19px;margin:0 0 10px;color:var(--ink)}
+.sub{color:var(--mute);margin:4px 0 16px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--text);padding:8px 14px;border-radius:999px}
+button.on{background:var(--accent);color:var(--onacc);border-color:var(--accent);font-weight:700}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.kpi b{display:block;font-family:Cambria,Georgia,serif;font-size:34px;color:var(--ink)}
+.kpi span{color:var(--mute);font-size:14px}
+.row{display:grid;grid-template-columns:minmax(110px,190px) 1fr 62px;gap:10px;align-items:center;margin:7px 0}
+.row .lab{font-size:14px;overflow-wrap:anywhere}
+.track{background:var(--bg);border-radius:6px;height:16px;overflow:hidden}
+.track i{display:block;height:100%;border-radius:6px}
+.row b{text-align:right;font-size:14px}
+.seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.note{color:var(--mute);font-size:13px;margin-top:10px}
+.call{border-radius:8px;background:var(--bg);padding:10px 12px;margin-top:12px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+.cm{display:grid;grid-template-columns:90px repeat(3,1fr);gap:4px;min-width:420px}
+.cm div{padding:12px 6px;text-align:center;border-radius:6px}
+.cm .h{color:var(--mute);font-size:13px;padding:6px}
+.cm .c{cursor:pointer;font-weight:700;border:2px solid transparent}
+.cm .c.sel{border-color:var(--ink)}
+input[type=range]{accent-color:var(--accent);width:180px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Credit Score Model Dashboard</h1>
+<p class="sub">Interactive view of model results and feature importance. Figures come from the 20,000-customer validation split of train.csv.</p>
+<nav id="nav">
+<button data-t="ov" class="on">Overview</button>
+<button data-t="mc">Model comparison</button>
+<button data-t="fi">Feature importance</button>
+<button data-t="in">Data insights</button>
+</nav>
+
+<section id="ov">
+<div class="kpis">
+<div class="kpi"><b>70.6%</b><span>XGBoost accuracy</span></div>
+<div class="kpi"><b>68.5%</b><span>XGBoost macro F1</span></div>
+<div class="kpi"><b>71.4%</b><span>Accuracy after tuning</span></div>
+<div class="kpi"><b>20,000</b><span>Validation records</span></div>
+</div>
+<div class="grid">
+<div class="card"><h2>Actual class mix (train.csv)</h2><div id="d1"></div></div>
+<div class="card"><h2>Predicted class mix (test.csv)</h2><div id="d2"></div></div>
+</div>
+<div class="card"><h2>Key takeaways</h2>
+<ul>
+<li>XGBoost and Random Forest are almost tied; both beat the simpler models.</li>
+<li>The “Good” class is hardest to predict (F1 of 0.61), as it is the smallest class.</li>
+<li>Credit mix, outstanding debt, interest rate and payment delays drive predictions.</li>
+</ul></div>
+</section>
+
+<section id="mc" class="hide">
+<div class="card"><h2>Model comparison</h2>
+<div class="seg" id="mseg"><button data-m="acc" class="on">Accuracy</button><button data-m="f1">Macro F1</button></div>
+<div id="mbars"></div>
+<p class="note" id="mnote"></p></div>
+<div class="card"><h2>XGBoost: confusion matrix</h2>
+<div class="seg" id="cseg"><button data-c="n" class="on">Counts</button><button data-c="p">% of actual class</button></div>
+<div class="tbl"><div class="cm" id="cm"></div></div>
+<div class="call" id="cmtxt">Tap a cell to see what it means.</div></div>
+<div class="card"><h2>XGBoost: per-class metrics</h2><div class="tbl"><table id="rep"></table></div></div>
+</section>
+
+<section id="fi" class="hide">
+<div class="card"><h2>Feature importance</h2>
+<div class="seg" id="fseg"><button data-f="x" class="on">XGBoost</button><button data-f="r">Random Forest</button>
+<label style="margin-left:8px">Top <b id="nv">10</b> <input type="range" id="nr" min="5" max="15" value="10"></label></div>
+<div id="fbars"></div>
+<div class="call" id="ftxt"></div>
+<p class="note">Importance shows how much the model relies on a feature, not cause and effect.</p></div>
+</section>
+
+<section id="in" class="hide">
+<div class="card"><h2>Median by credit score class</h2>
+<div class="seg" id="iseg"></div>
+<div id="ibars"></div></div>
+<div class="card"><h2>Credit mix vs credit score</h2>
+<div id="mix"></div>
+<p class="note">Each bar shows how customers with that credit mix split across Poor, Standard and Good.</p></div>
+</section>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const CL=['Poor','Standard','Good'],COL=['var(--poor)','var(--std)','var(--good)'];
+const f1=(n)=>n.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+const f0=(n)=>Math.round(n).toLocaleString('en-US');
+function row(l,v,max,c,t,tip){return `<div class="row" title="${tip||''}"><span class="lab">${l}</span><span class="track"><i style="width:${Math.max(1,v/max*100)}%;background:${c}"></i></span><b>${t}</b></div>`}
+function seg(el,attr,cb){el.querySelectorAll('button').forEach(b=>b.onclick=()=>{el.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');cb(b.dataset[attr])})}
+
+// tabs
+seg($('#nav'),'t',t=>{['ov','mc','fi','in'].forEach(id=>$('#'+id).classList.toggle('hide',id!==t))});
+
+// overview
+$('#d1').innerHTML=[['Standard',53.2,1],['Poor',29.0,0],['Good',17.8,2]].map(([n,v,i])=>row(n,v,60,COL[i],f1(v)+'%')).join('');
+$('#d2').innerHTML=[['Standard',53.3,1],['Poor',27.9,0],['Good',18.9,2]].map(([n,v,i])=>row(n,v,60,COL[i],f1(v)+'%')).join('');
+
+// model comparison
+const M=[['XGBoost',70.575,68.501],['Random Forest',70.5,68.576],['Decision Tree',68.815,66.634],['Logistic Regression',65.915,63.944]];
+function drawM(m){
+ let d=M.map(x=>[x[0],m==='acc'?x[1]:x[2]]);
+ if(m==='acc')d.push(['XGBoost (tuned)',71.37]);
+ d.sort((a,b)=>b[1]-a[1]);
+ $('#mbars').innerHTML=d.map(x=>row(x[0],x[1]-50,30,x[0].includes('tuned')?'var(--std)':'var(--accent)',f1(x[1])+'%')).join('');
+ $('#mnote').textContent='Bars start at 50% to make differences visible. '+(m==='acc'?'The tuned XGBoost came from a small random search.':'Macro F1 averages the three classes equally.');
+}
+seg($('#mseg'),'m',drawM);drawM('acc');
+
+// confusion matrix
+const CM=[[3942,1457,327],[1506,7855,1219],[94,1282,2318]];
+let cmode='n',sel=null;
+function drawCM(){
+ const rs=CM.map(r=>r.reduce((a,b)=>a+b,0));
+ let h='<div class="h"></div>'+CL.map(c=>`<div class="h">Predicted<br>${c}</div>`).join('');
+ CM.forEach((r,i)=>{h+=`<div class="h" style="align-self:center">Actual<br>${CL[i]}</div>`;
+  r.forEach((v,j)=>{const p=v/rs[i]*100,val=cmode==='n'?v:p,mx=cmode==='n'?7855:100,a=.1+.8*val/mx;
+   h+=`<div class="c${sel===i+'-'+j?' sel':''}" data-i="${i}" data-j="${j}" style="background:rgba(42,157,143,${a.toFixed(2)});color:${a>.55?'#fff':'var(--text)'}">${cmode==='n'?f0(v):f1(p)+'%'}</div>`})});
+ $('#cm').innerHTML=h;
+ $('#cm').querySelectorAll('.c').forEach(c=>c.onclick=()=>{const i=+c.dataset.i,j=+c.dataset.j;sel=i+'-'+j;
+  const v=CM[i][j],p=v/rs[i]*100;
+  $('#cmtxt').textContent=i===j?`${f0(v)} ${CL[i]} customers (${f1(p)}% of all actual ${CL[i]}) were correctly predicted.`:`${f0(v)} actual ${CL[i]} customers (${f1(p)}%) were wrongly predicted as ${CL[j]}.`;drawCM()});
+}
+seg($('#cseg'),'c',m=>{cmode=m;drawCM()});drawCM();
+// per-class metrics from matrix
+(function(){const cs=[0,1,2].map(j=>CM.reduce((a,r)=>a+r[j],0)),rs=CM.map(r=>r.reduce((a,b)=>a+b,0));
+ let h='<tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr>';
+ CL.forEach((c,i)=>{const p=CM[i][i]/cs[i],r=CM[i][i]/rs[i],f=2*p*r/(p+r);
+  h+=`<tr${c==='Good'?' style="color:var(--poor);font-weight:700"':''}><td>${c}</td><td>${p.toFixed(2)}</td><td>${r.toFixed(2)}</td><td>${f.toFixed(2)}</td><td>${f0(rs[i])}</td></tr>`});
+ $('#rep').innerHTML=h})();
+
+// feature importance
+const FX=[['Credit_Mix_Good',34.4],['Credit_Mix_Standard',18.1],['Credit_Mix_Bad',10.8],['Outstanding_Debt',2.9],['Interest_Rate',2.2],['Payment_of_Min_Amount_Yes',2.2],['Month_Num',1.5],['Num_Credit_Card',1.5],['Loan_Count',0.9],['Delay_from_due_date',0.9],['Payment_Behaviour_Low_spent_Small_value_payments',0.9],['Num_Credit_Inquiries',0.8],['Changed_Credit_Limit',0.8],['Num_Bank_Accounts',0.7],['EMI_to_Salary',0.7]];
+const FR=[['Outstanding_Debt',7.5],['Interest_Rate',5.9],['Credit_History_Age',4.8],['Delay_from_due_date',4.8],['Credit_Mix_Good',4.3],['Changed_Credit_Limit',4.3],['Debt_to_Income',3.9],['Credit_Mix_Standard',3.7],['Num_Credit_Inquiries',3.5],['Num_Credit_Card',3.3],['Monthly_Balance',3.1],['Savings_Rate',3.1],['Amount_invested_monthly',3.0],['Credit_Utilization_Ratio',3.0],['EMI_to_Salary',3.0]];
+let fm='x';
+function drawF(){
+ const d=(fm==='x'?FX:FR).slice(0,+$('#nr').value),mx=d[0][1];
+ $('#nv').textContent=d.length;
+ $('#fbars').innerHTML=d.map(([n,v],i)=>row(n.replace(/_/g,' '),v,mx,fm==='x'?'var(--accent)':'var(--std)',f1(v)+'%','Rank '+(i+1))).join('');
+ $('#ftxt').textContent=fm==='x'?'The three Credit Mix flags together carry about 63% of XGBoost’s importance. Everything else is small by comparison.':'Random Forest spreads importance more evenly: debt, interest rate, credit history and payment delays lead.';
+}
+seg($('#fseg'),'f',m=>{fm=m;drawF()});$('#nr').oninput=drawF;drawF();
+
+// data insights
+const I={'Interest rate (%)':[21,13,7],'Outstanding debt':[1945,1002,737],'Delay from due date (days)':[27,18,10],'Delayed payments (count)':[17,14,8],'Credit history (months)':[161,227,288],'Annual income':[32276,37201,45536]};
+$('#iseg').innerHTML=Object.keys(I).map((k,i)=>`<button data-k="${k}"${i?'':' class="on"'}>${k}</button>`).join('');
+function drawI(k){const v=I[k],mx=Math.max(...v);$('#ibars').innerHTML=v.map((x,i)=>row(CL[i],x,mx,COL[i],f0(x))).join('')}
+seg($('#iseg'),'k',drawI);drawI(Object.keys(I)[0]);
+const MX=[['Bad mix',[60,38,1]],['Standard mix',[22,73,6]],['Good mix',[16,35,49]]];
+$('#mix').innerHTML=MX.map(([n,[p,s,g]])=>`<div class="row" style="grid-template-columns:minmax(90px,130px) 1fr"><span class="lab">${n}</span><span class="track" style="height:26px;display:flex"><i style="width:${p}%;background:var(--poor);border-radius:0" title="Poor ${p}%"></i><i style="width:${s}%;background:var(--std);border-radius:0" title="Standard ${s}%"></i><i style="width:${g}%;background:var(--good);border-radius:0" title="Good ${g}%"></i></span></div>`).join('')+'<div class="note">Left to right: <b style="color:var(--poor)">Poor</b>, <b style="color:var(--std)">Standard</b>, <b style="color:var(--good)">Good</b>. Hover a segment for its share.</div>';
+</script>
+</body>
+</html>
